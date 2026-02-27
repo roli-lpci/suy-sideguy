@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "suy-sideguy"
+version = "0.1.0"
+description = "Runtime guardian for autonomous agents (OSS companion to Hermes Warden)"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "Apache-2.0"
+authors = [{ name = "Rolando Bosch" }]
+keywords = ["security", "ai-agent", "runtime-monitoring", "incident-response"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Topic :: System :: Monitoring",
+]
+dependencies = [
+  "psutil>=5.9",
+  "PyYAML>=6.0",
+  "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+]
+
+[project.scripts]
+suy-warden = "suy_sideguy.warden:entrypoint"
+suy-forensic-report = "suy_sideguy.forensic_report:main"
+
+[tool.setuptools]
+packages = ["suy_sideguy"]

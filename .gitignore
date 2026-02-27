@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Local/runtime artifacts
+.DS_Store
+*.log
+coverage.xml
+htmlcov/
+
+# Suy Sideguy logs
+.local/
+security/INCIDENT_REPORT_*.json

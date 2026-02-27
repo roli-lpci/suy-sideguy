@@ -1,0 +1,90 @@
+agent:
+  name: "openclaw"
+  pid: null
+
+filesystem:
+  allowed_paths:
+    - "/Users/*/.openclaw/**"
+    - "/Users/*/Desktop/Coding/**"
+    - "/Users/*/Documents/projects/**"
+    - "/tmp/openclaw_*/**"
+    - "/tmp/openclaw/**"
+
+  # Hard-kill invariants (near-zero FP)
+  forbidden_paths:
+    - "/Users/*/.ssh/**"
+    - "/Users/*/.gnupg/**"
+    - "/Users/*/.aws/**"
+    - "/Users/*/.config/gcloud/**"
+    - "/Users/*/.config/gh/**"
+
+  forbidden_extensions:
+    - ".pem"
+    - ".key"
+    - ".p12"
+    - ".keychain"
+    - ".keychain-db"
+
+network:
+  # NOTE: current warden network observer emits IPs; unknown destinations are flagged.
+  allowed_domains:
+    - "localhost"
+    - "127.0.0.1"
+    - "api.openai.com"
+    - "api.anthropic.com"
+    - "openrouter.ai"
+    - "api.github.com"
+    - "github.com"
+    - "registry.npmjs.org"
+    - "pypi.org"
+    - "files.pythonhosted.org"
+  forbidden_domains:
+    - "pastebin.com"
+    - "hastebin.com"
+    - "transfer.sh"
+    - "file.io"
+    - "0x0.st"
+  allowed_ports:
+    - 80
+    - 443
+    - 53
+    - 11434
+    - 18789
+
+process:
+  allowed_commands:
+    - "openclaw"
+    - "bash"
+    - "sh"
+    - "zsh"
+    - "python3"
+    - "python"
+    - "node"
+    - "npm"
+    - "npx"
+    - "git"
+    - "ls"
+    - "cat"
+    - "echo"
+    - "grep"
+    - "sed"
+    - "awk"
+    - "jq"
+    - "find"
+
+  # Hard-kill invariants requested
+  forbidden_commands:
+    - "curl"
+    - "wget"
+    - "ssh"
+    - "scp"
+    - "rsync"
+    - "sudo"
+    - "pkill"
+    - "killall"
+    - "rm -rf /"
+
+behavior:
+  flag_threshold: 10
+  flag_window: 300
+  max_actions_per_minute: 240
