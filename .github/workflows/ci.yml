@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          pip install build
+
+      - name: Lint (basic syntax)
+        run: |
+          python -m py_compile suy_sideguy/warden.py
+          python -m py_compile suy_sideguy/forensic_report.py
+
+      - name: Test
+        run: pytest -q
+
+      - name: Build package
+        run: python -m build

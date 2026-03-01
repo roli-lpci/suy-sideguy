@@ -116,6 +116,15 @@ Early flag noise is normal during policy calibration on real workloads.
 
 ---
 
+
+## Release quality status
+
+- ✅ Tests in repo (`pytest`)
+- ✅ Package buildable (`python -m build`)
+- ✅ CI workflow (`.github/workflows/ci.yml`)
+- ✅ Publish workflow (`.github/workflows/publish.yml`)
+- ✅ Security disclosure policy (`SECURITY.md`)
+
 ## Development
 
 ```bash
@@ -127,5 +136,7 @@ Also see:
 - `CONTRIBUTING.md`
 - `SECURITY.md`
 - `PUBLISH_CHECKLIST.md`
+- `AGENTS.md`
+- `CODE_OF_CONDUCT.md`
 - Audit checklist: `docs/AUDIT_CHECKLIST.md`
 - Layered plan: `docs/IMPLEMENTATION_PLAN_LAYERED.md`
