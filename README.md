@@ -58,7 +58,7 @@ Use one of:
 
 ### 2) Start from the example policy scope
 - Open `examples/scope.openclaw.yaml`
-- For lower disruption during tuning, start with `examples/scope.low-disruption.yaml`
+- For staged rollout, start with `examples/scope.low-disruption.yaml`
 - Narrow allowlists to only what your workload truly needs
 
 ### 3) Run the warden
@@ -107,9 +107,9 @@ Tip: treat these as security artifacts. Protect access and define retention/rota
 
 ## Expected flag noise (early rollout)
 
-Some flag noise is expected while tuning real workloads.
+Early flag noise is normal during policy calibration on real workloads.
 
-- Treat early `FLAG` events as data, not failure.
+- Treat early `FLAG` events as calibration data, not immediate defects.
 - Use policy thresholds (`flag_threshold`, `flag_window`) to control when accumulated risk escalates to kill.
 - Keep **hard invariants** (e.g., forbidden secrets paths / destructive commands) as immediate stop conditions.
 - Start in audit-first mode, then tighten only after reviewing forensic logs.

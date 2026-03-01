@@ -7,7 +7,7 @@ Use this checklist before switching from audit-only to stronger enforcement.
 - [ ] `~/.local/share/sysmond/logs/incidents/*.json` exists (if any kills)
 - [ ] Canary logs present (`security/canary-audit.jsonl`, `security/canary-alerts.jsonl`)
 
-## B) False-Flag Review
+## B) Signal Quality Review
 - [ ] Top 20 `FLAG` reasons reviewed
 - [ ] LLM parser failures categorized separately from true risky actions
 - [ ] Noise ratio documented (flags per 100 actions)

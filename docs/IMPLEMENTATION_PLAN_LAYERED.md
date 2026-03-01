@@ -2,7 +2,7 @@
 
 Goal: strengthen runtime safety without breaking normal user workflows.
 
-Core principle: **some flag noise is expected** during early rollout; kills should only happen after configurable risk accumulation or hard-invariant violations.
+Core principle: early rollout is **signal-first**; flags provide calibration data, and kill actions should follow configurable risk accumulation except for hard invariants.
 
 ---
 
@@ -74,7 +74,7 @@ Audit checks:
   - `flag_threshold`
   - `flag_window`
   - `max_actions_per_minute`
-- [ ] Define defaults tuned for low disruption
+- [ ] Define defaults tuned for stable operations
 - [ ] Keep immediate kill for hard invariants regardless of count
 
 Audit checks:
