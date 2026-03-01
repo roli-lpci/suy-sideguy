@@ -104,6 +104,15 @@ Tip: treat these as security artifacts. Protect access and define retention/rota
 - Name matching (`--agent-name`) can over-match; prefer PID targeting in production.
 - This project should be one part of a layered defense strategy.
 
+## Expected flag noise (early rollout)
+
+Some flag noise is expected while tuning real workloads.
+
+- Treat early `FLAG` events as data, not failure.
+- Use policy thresholds (`flag_threshold`, `flag_window`) to control when accumulated risk escalates to kill.
+- Keep **hard invariants** (e.g., forbidden secrets paths / destructive commands) as immediate stop conditions.
+- Start in audit-first mode, then tighten only after reviewing forensic logs.
+
 ---
 
 ## Development
