@@ -1,8 +1,8 @@
 """
 Little Warden - Outbound Agent Security Monitor
 ================================================
-Monitors AI agent behavior in real-time and kills compromised agents.
-Runs as a separate, stealthy daemon process that the agent cannot detect or disable.
+Monitors AI agent behavior in real-time and can terminate high-risk agent sessions.
+Runs as a separate daemon process for defense-in-depth monitoring.
 
 Architecture:
   1. Observer    - Watches filesystem, network, and process events

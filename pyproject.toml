@@ -32,6 +32,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
+  "ruff>=0.6.0",
+  "mypy>=1.10",
 ]
 
 [project.scripts]
@@ -40,3 +42,13 @@ suy-forensic-report = "suy_sideguy.forensic_report:main"
 
 [tool.setuptools]
 packages = ["suy_sideguy"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.mypy]
+python_version = "3.9"
+files = ["suy_sideguy"]
+ignore_missing_imports = true
+warn_unused_ignores = true

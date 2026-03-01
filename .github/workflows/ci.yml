@@ -8,6 +8,33 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
+          pip install build
+
+      - name: Test
+        run: pytest -q
+
+      - name: Build package
+        run: python -m build
+
+  ruff:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,15 +48,25 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e .[dev]
-          pip install build
 
-      - name: Lint (basic syntax)
+      - name: Ruff
+        run: ruff check .
+
+  mypy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
         run: |
-          python -m py_compile suy_sideguy/warden.py
-          python -m py_compile suy_sideguy/forensic_report.py
+          python -m pip install --upgrade pip
+          pip install -e .[dev]
 
-      - name: Test
-        run: pytest -q
-
-      - name: Build package
-        run: python -m build
+      - name: Mypy
+        run: mypy suy_sideguy

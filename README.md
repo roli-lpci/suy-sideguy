@@ -13,7 +13,7 @@ Suy Sideguy watches a running agent process and decides whether actions should b
 ### ✅ What it does
 - Watches process, file, and network behavior for an agent process
 - Applies policy rules (optionally with a local LLM judge via Ollama)
-- Hard-stops severe violations with `SIGKILL`
+- Can terminate severe violations with `SIGKILL` when policy requires it
 - Stores evidence and can generate incident-ready forensic reports
 
 ### ⚠️ What it does not do
@@ -119,6 +119,9 @@ Early flag noise is normal during policy calibration on real workloads.
 
 ## Release quality status
 
+_Current status based on repository checks and CI configuration; not a formal security certification._
+
+
 - ✅ Tests in repo (`pytest`)
 - ✅ Package buildable (`python -m build`)
 - ✅ CI workflow (`.github/workflows/ci.yml`)
@@ -140,3 +143,4 @@ Also see:
 - `CODE_OF_CONDUCT.md`
 - Audit checklist: `docs/AUDIT_CHECKLIST.md`
 - Layered plan: `docs/IMPLEMENTATION_PLAN_LAYERED.md`
+- Internal reviews: `docs/internal/`

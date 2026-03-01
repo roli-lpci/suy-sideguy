@@ -1,0 +1,159 @@
+import asyncio
+import os
+import tempfile
+from datetime import datetime, timezone
+
+from suy_sideguy.warden import (
+    ActionType,
+    AgentAction,
+    IncidentLogger,
+    Verdict,
+    Warden,
+    WardenVerdict,
+)
+
+
+SCOPE_YAML = """
+filesystem:
+  allowed_paths:
+    - "/tmp/safe/**"
+  forbidden_paths:
+    - "/tmp/secret/**"
+  forbidden_extensions:
+    - ".pem"
+network:
+  allowed_domains:
+    - "example.com"
+  forbidden_domains:
+    - "evil.com"
+  allowed_ports: [443]
+process:
+  allowed_commands: ["python3"]
+  forbidden_commands: ["curl"]
+behavior:
+  flag_threshold: 3
+  flag_window: 60
+  max_actions_per_minute: 200
+"""
+
+
+def _scope_file() -> str:
+    with tempfile.NamedTemporaryFile("w", delete=False) as f:
+        f.write(SCOPE_YAML)
+        return f.name
+
+
+def _warden() -> Warden:
+    return Warden(scope_path=_scope_file(), agent_pid=os.getpid(), poll_interval=0.01)
+
+
+def _flag_verdict() -> WardenVerdict:
+    action = AgentAction(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        action_type=ActionType.UNKNOWN,
+        target="x",
+    )
+    return WardenVerdict(verdict=Verdict.FLAG, reason="flag", action=action, evaluator="test")
+
+
+def test_flag_escalation_disabled_by_default(monkeypatch):
+    monkeypatch.delenv("WARDEN_KILL_ON_FLAGS", raising=False)
+    w = _warden()
+    w.flag_timestamps = [1.0, 2.0, 3.0]
+    assert w._check_flag_accumulation() is None
+
+
+def test_flag_escalation_kills_when_enabled(monkeypatch):
+    monkeypatch.setenv("WARDEN_KILL_ON_FLAGS", "1")
+    w = _warden()
+    now = 1000.0
+    w.flag_timestamps = [now - 10, now - 5, now - 1]
+    monkeypatch.setattr("time.time", lambda: now)
+    v = w._check_flag_accumulation()
+    assert v is not None
+    assert v.verdict == Verdict.KILL
+    assert "Flag accumulation" in v.reason
+
+
+def test_kill_trigger_on_forbidden_path():
+    w = _warden()
+    action = AgentAction(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        action_type=ActionType.FILE_READ,
+        target="/tmp/secret/token.txt",
+    )
+    v = asyncio.run(w.evaluate_action(action))
+    assert v.verdict == Verdict.KILL
+    assert "forbidden path" in v.reason.lower()
+
+
+def test_execute_kill_path_without_real_kill(monkeypatch, tmp_path):
+    w = Warden(scope_path=_scope_file(), agent_pid=os.getpid(), log_dir=str(tmp_path / "logs"))
+    v = _flag_verdict()
+    v.verdict = Verdict.KILL
+    v.reason = "test kill"
+
+    monkeypatch.setattr(w.killswitch, "kill_agent", lambda: {"killed": True, "pids_terminated": [123], "errors": []})
+    monkeypatch.setattr(w.killswitch, "attempt_rollback", lambda action: {"attempted": True, "success": True, "details": "mock"})
+
+    asyncio.run(w.execute_kill(v))
+    assert w.killed is True
+    incidents = list((tmp_path / "logs" / "incidents").glob("*.json"))
+    assert incidents, "incident report should be generated"
+
+
+def test_llm_unavailable_fallback_path():
+    w = _warden()
+    w.judge.available = False
+    action = AgentAction(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        action_type=ActionType.NETWORK_OUT,
+        target="8.8.8.8:443",
+        details={"remote_ip": "8.8.8.8", "remote_port": 443},
+    )
+    v = asyncio.run(w.evaluate_action(action))
+    assert v.verdict == Verdict.FLAG
+    assert "LLM unavailable" in v.reason
+
+
+def test_incident_report_schema_core_fields(tmp_path):
+    logger = IncidentLogger(log_dir=str(tmp_path))
+    action = AgentAction(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        action_type=ActionType.FILE_WRITE,
+        target="/tmp/demo.txt",
+    )
+    kill_v = WardenVerdict(verdict=Verdict.KILL, reason="x", action=action, evaluator="rule_engine")
+    report_path = logger.generate_incident_report(kill_v, [kill_v, _flag_verdict()])
+
+    import json
+
+    report = json.loads(open(report_path, "r", encoding="utf-8").read())
+    assert "incident_report" in report
+    assert "kill_trigger" in report
+    assert "session_summary" in report
+    assert "liability_statement" in report
+    assert report["kill_trigger"]["action_type"] == ActionType.FILE_WRITE.value
+
+
+def test_rate_limit_kill_trigger_when_exceeded(monkeypatch):
+    w = _warden()
+    now = 100.0
+    monkeypatch.setattr("time.time", lambda: now)
+    w.action_timestamps = [now - 1] * (w.scope.max_actions_per_minute + 1)
+    v = w._check_rate_limit()
+    assert v is not None
+    assert v.verdict == Verdict.KILL
+
+
+def test_llm_unavailable_for_unknown_command_flags():
+    w = _warden()
+    w.judge.available = False
+    action = AgentAction(
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        action_type=ActionType.PROCESS_EXEC,
+        target="unknowncmd --x",
+    )
+    v = asyncio.run(w.evaluate_action(action))
+    assert v.verdict == Verdict.FLAG
+    assert "Unknown command" in v.reason
