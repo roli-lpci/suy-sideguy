@@ -508,8 +508,8 @@ class ProcessObserver:
     
     def __init__(self, agent_pid: int):
         self.agent_pid = agent_pid
-        self._known_files: set[str] = set()
-        self._known_connections: set[tuple[str, int]] = set()
+        self._known_files: set[tuple[int, str, str]] = set()
+        self._known_connections: set[tuple[int, str, int]] = set()
         self._known_children: set[int] = set()
 
     def get_agent_pids(self) -> list[int]:
