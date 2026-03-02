@@ -35,16 +35,17 @@ Use both for defense in depth.
 ## Install
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -U pip
-pip install -e .
+pip install suy-sideguy
 ```
 
-For development (tests + tooling):
+Requires Python 3.9+.
+
+For development:
 
 ```bash
-pip install -e .[dev]
+git clone https://github.com/roli-lpci/suy-sideguy.git
+cd suy-sideguy
+pip install -e ".[dev]"
 ```
 
 ---
