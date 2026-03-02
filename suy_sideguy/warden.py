@@ -16,6 +16,8 @@ Usage:
   python3 warden.py --scope scope.yaml --agent-name openclaw
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import os
@@ -28,7 +30,6 @@ from pathlib import Path
 from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
 from enum import Enum
-from typing import Optional
 
 try:
     import yaml
@@ -71,7 +72,7 @@ class AgentAction:
     action_type: ActionType
     target: str
     details: dict = field(default_factory=dict)
-    source_pid: Optional[int] = None
+    source_pid: int | None = None
 
     def to_dict(self):
         d = asdict(self)
@@ -248,11 +249,11 @@ Rules:
                     return self.available
         except Exception as e:
             logging.warning(f"Ollama not reachable: {e}")
-            self.available = False
-            return False
+        self.available = False
+        return False
     
-    async def evaluate(self, action: AgentAction, scope_context: str, 
-                       recent_actions: list = None) -> WardenVerdict:
+    async def evaluate(self, action: AgentAction, scope_context: str,
+                       recent_actions: list | None = None) -> WardenVerdict:
         
         recent_summary = ""
         if recent_actions:
@@ -261,7 +262,7 @@ Rules:
                 recent_lines.append(
                     f"  [{a.timestamp[-12:]}] {a.action_type.value}: {a.target}"
                 )
-            recent_summary = f"\n\nRecent actions:\n" + "\n".join(recent_lines)
+            recent_summary = "\n\nRecent actions:\n" + "\n".join(recent_lines)
         
         user_prompt = f"""Evaluate this agent action:
 
@@ -336,7 +337,7 @@ Scope:
 class IncidentLogger:
     """Logs all actions and generates forensic reports."""
     
-    def __init__(self, log_dir: str = None):
+    def __init__(self, log_dir: str | None = None):
         if log_dir is None:
             log_dir = os.path.expanduser("~/.local/share/sysmond/logs")
         
@@ -436,37 +437,39 @@ class Killswitch:
         self.agent_pid = agent_pid
     
     def kill_agent(self) -> dict:
-        result = {"killed": False, "pids_terminated": [], "errors": []}
-        
+        killed = False
+        pids_terminated: list[int] = []
+        errors: list[str] = []
+
         try:
             parent = psutil.Process(self.agent_pid)
             children = parent.children(recursive=True)
-            
+
             for child in children:
                 try:
                     child.kill()
-                    result["pids_terminated"].append(child.pid)
+                    pids_terminated.append(child.pid)
                 except psutil.NoSuchProcess:
                     pass
                 except Exception as e:
-                    result["errors"].append(f"Child {child.pid}: {e}")
-            
+                    errors.append(f"Child {child.pid}: {e}")
+
             try:
                 parent.kill()
-                result["pids_terminated"].append(self.agent_pid)
-                result["killed"] = True
+                pids_terminated.append(self.agent_pid)
+                killed = True
             except psutil.NoSuchProcess:
-                result["killed"] = True
+                killed = True
             except Exception as e:
-                result["errors"].append(f"Agent {self.agent_pid}: {e}")
-                
+                errors.append(f"Agent {self.agent_pid}: {e}")
+
         except psutil.NoSuchProcess:
-            result["killed"] = True
-            result["errors"].append(f"PID {self.agent_pid} already gone")
+            killed = True
+            errors.append(f"PID {self.agent_pid} already gone")
         except Exception as e:
-            result["errors"].append(f"Killswitch error: {e}")
-        
-        return result
+            errors.append(f"Killswitch error: {e}")
+
+        return {"killed": killed, "pids_terminated": pids_terminated, "errors": errors}
     
     def attempt_rollback(self, action: AgentAction) -> dict:
         rollback = {
@@ -505,11 +508,11 @@ class ProcessObserver:
     
     def __init__(self, agent_pid: int):
         self.agent_pid = agent_pid
-        self._known_files = set()
-        self._known_connections = set()
-        self._known_children = set()
-    
-    def get_agent_pids(self) -> list:
+        self._known_files: set[str] = set()
+        self._known_connections: set[tuple[str, int]] = set()
+        self._known_children: set[int] = set()
+
+    def get_agent_pids(self) -> list[int]:
         pids = [self.agent_pid]
         try:
             parent = psutil.Process(self.agent_pid)
@@ -519,9 +522,9 @@ class ProcessObserver:
             pass
         return pids
     
-    def observe(self) -> list:
+    def observe(self) -> list[AgentAction]:
         """Poll agent activity and return NEW actions since last check."""
-        actions = []
+        actions: list[AgentAction] = []
         now = datetime.now(timezone.utc).isoformat()
         
         try:
@@ -622,8 +625,8 @@ class Warden:
     def __init__(self, scope_path: str, agent_pid: int, 
                  poll_interval: float = 0.5,
                  model: str = "qwen3:4b",
-                 log_dir: str = None):
-        
+                 log_dir: str | None = None):
+
         self.scope = Scope(scope_path)
         self.observer = ProcessObserver(agent_pid)
         self.judge = LLMJudge(model=model)
@@ -719,7 +722,7 @@ class Warden:
         elif action.action_type in (ActionType.PROCESS_EXEC, ActionType.PROCESS_SPAWN):
             verdict, reason = self.scope.check_command(action.target)
         else:
-            verdict, reason = Verdict.FLAG, f"Unknown action type"
+            verdict, reason = Verdict.FLAG, "Unknown action type"
         
         # Definitive answers don't need LLM
         if verdict in (Verdict.SAFE, Verdict.KILL):
@@ -768,7 +771,7 @@ class Warden:
     async def run(self):
         """Main monitoring loop."""
         
-        self.log.info(f"🛡️  Little Warden active")
+        self.log.info("🛡️  Little Warden active")
         self.log.info(f"   PID: {self.agent_pid}")
         self.log.info(f"   Poll: {self.poll_interval}s")
         self.log.info(f"   Agent: {self.scope.config.get('agent', {}).get('name', 'unknown')}")
@@ -776,7 +779,7 @@ class Warden:
         await self.judge.check_available()
         self.log.info(f"   LLM: {self.judge.model} {'✅' if self.judge.available else '❌ (rules only)'}")
         self.log.info(f"   Log: {self.logger.action_log_path}")
-        self.log.info(f"   ─────────────────────────────")
+        self.log.info("   ─────────────────────────────")
         
         self.running = True
         self.start_time = time.time()
@@ -837,12 +840,12 @@ class Warden:
         flags = sum(1 for v in self.all_verdicts if v.verdict == Verdict.FLAG)
         kills = sum(1 for v in self.all_verdicts if v.verdict == Verdict.KILL)
         
-        self.log.info(f"")
+        self.log.info("")
         self.log.info(f"🛡️  Session complete ({duration:.1f}s)")
         self.log.info(f"   Observed: {len(self.all_verdicts)} | "
                       f"Safe: {safe} | Flags: {flags} | Kills: {kills}")
         if self.killed:
-            self.log.info(f"   ⚠️  AGENT WAS TERMINATED")
+            self.log.info("   ⚠️  AGENT WAS TERMINATED")
 
 
 # ════════════════════════════════════════════════════════════
