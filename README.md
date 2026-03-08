@@ -7,7 +7,7 @@
 
 Runtime safety guard for autonomous AI agents.
 
-Suy Sideguy watches a running agent process and decides whether actions should be **SAFE**, **FLAGGED**, or **KILLED** based on your policy.
+Suy Sideguy watches a running agent process and decides whether actions should be **SAFE**, **FLAGGED**, **HALTED**, or **KILLED** based on your policy.
 
 ---
 
@@ -16,7 +16,8 @@ Suy Sideguy watches a running agent process and decides whether actions should b
 ### ✅ What it does
 - Watches process, file, and network behavior for an agent process
 - Applies policy rules (optionally with a local LLM judge via Ollama)
-- Can terminate severe violations with `SIGKILL` when policy requires it
+- **HALT** suspicious actions (freeze + alert) before they escalate
+- **KILL** severe violations with `SIGKILL` when policy requires it
 - Stores evidence and can generate incident-ready forensic reports
 
 ### ⚠️ What it does not do
@@ -108,6 +109,29 @@ Tip: treat these as security artifacts. Protect access and define retention/rota
 - `SIGKILL` is immediate and can interrupt legitimate work if policy is too broad.
 - Name matching (`--agent-name`) can over-match; prefer PID targeting in production.
 - This project should be one part of a layered defense strategy.
+
+## Verdict levels
+
+| Verdict | Meaning | Response |
+|---------|---------|----------|
+| `SAFE` | Action is within policy | Continue |
+| `FLAG` | Suspicious, below threshold | Log, continue |
+| `HALT` | Dangerous pattern detected | Freeze, alert operator |
+| `KILL` | Critical violation | `SIGKILL` immediately |
+
+### HALT triggers (freeze + alert, agent is not killed)
+- **3+ file deletions in 10 seconds** — mass deletion pattern
+- **curl or wget spawned** — unexpected outbound data transfer
+- **50+ network calls in 60 seconds** — bulk messaging / API spam
+- **Write outside allowed workspace** — unexpected filesystem access
+
+### KILL triggers (immediate, no recovery)
+- **SSH key access** — any read/write to `~/.ssh/` or `*id_rsa*`, `*id_ed25519*`
+- **Config tampering** — writing to `~/.openclaw/openclaw.json`
+- **rm -rf on non-tmp paths** — destructive sweep outside `/tmp`
+- **Forbidden paths** — any path in your scope's `deny_write` list
+
+---
 
 ## Expected flag noise (early rollout)
 

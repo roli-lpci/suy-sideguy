@@ -54,6 +54,7 @@ except ImportError as e:
 class Verdict(Enum):
     SAFE = "SAFE"
     FLAG = "FLAG"
+    HALT = "HALT"
     KILL = "KILL"
 
 class ActionType(Enum):
@@ -639,6 +640,8 @@ class Warden:
         self.all_verdicts: list = []
         self.flag_timestamps: list = []
         self.action_timestamps: list = []
+        self.delete_timestamps: list = []
+        self.network_out_timestamps: list = []
         self.start_time = time.time()
         self.running = False
         self.killed = False
@@ -709,10 +712,121 @@ class Warden:
             )
         return None
 
+    def _check_hardcoded_kill(self, action: AgentAction) -> WardenVerdict | None:
+        """Hardcoded KILL rules for critical threats."""
+        target = action.target
+
+        # SSH key access
+        if action.action_type in (ActionType.FILE_READ, ActionType.FILE_WRITE):
+            expanded = os.path.expanduser(os.path.abspath(target))
+            ssh_dir = os.path.expanduser("~/.ssh")
+            if expanded.startswith(ssh_dir + os.sep) or expanded == ssh_dir:
+                return WardenVerdict(
+                    verdict=Verdict.KILL, reason=f"SSH directory access: {target}",
+                    action=action, evaluator="rule_engine"
+                )
+            basename = os.path.basename(target)
+            for pat in ("*id_rsa*", "*id_ed25519*"):
+                if fnmatch.fnmatch(basename, pat):
+                    return WardenVerdict(
+                        verdict=Verdict.KILL, reason=f"SSH key file access: {target}",
+                        action=action, evaluator="rule_engine"
+                    )
+
+        # Modifying ~/.openclaw/openclaw.json
+        if action.action_type == ActionType.FILE_WRITE:
+            expanded = os.path.expanduser(os.path.abspath(target))
+            openclaw_cfg = os.path.expanduser("~/.openclaw/openclaw.json")
+            if expanded == os.path.abspath(openclaw_cfg):
+                return WardenVerdict(
+                    verdict=Verdict.KILL, reason=f"Modifying openclaw config: {target}",
+                    action=action, evaluator="rule_engine"
+                )
+
+        # rm -rf on non-tmp paths
+        if action.action_type in (ActionType.PROCESS_EXEC, ActionType.PROCESS_SPAWN):
+            cmd = action.target.strip()
+            if "rm " in cmd and ("-rf" in cmd or "-r" in cmd):
+                # Extract the path argument (last token as heuristic)
+                parts = cmd.split()
+                path_args = [p for p in parts[1:] if not p.startswith("-")]
+                for p in path_args:
+                    expanded = os.path.expanduser(os.path.abspath(p))
+                    if not expanded.startswith("/tmp"):
+                        return WardenVerdict(
+                            verdict=Verdict.KILL,
+                            reason=f"rm -rf on non-tmp path: {p}",
+                            action=action, evaluator="rule_engine"
+                        )
+
+        return None
+
+    def _check_halt_triggers(self, action: AgentAction) -> WardenVerdict | None:
+        """Behavioral HALT triggers — suspicious but not kill-worthy."""
+        now = time.time()
+
+        # 3+ file deletions in 10 seconds
+        if action.action_type == ActionType.FILE_DELETE:
+            self.delete_timestamps.append(now)
+            self.delete_timestamps = [t for t in self.delete_timestamps if now - t <= 10]
+            if len(self.delete_timestamps) >= 3:
+                return WardenVerdict(
+                    verdict=Verdict.HALT,
+                    reason=f"Rapid file deletion: {len(self.delete_timestamps)} "
+                           f"deletes in 10s",
+                    action=action, evaluator="rule_engine"
+                )
+
+        # curl or wget process spawned
+        if action.action_type in (ActionType.PROCESS_EXEC, ActionType.PROCESS_SPAWN):
+            base_cmd = os.path.basename(action.target.strip().split()[0]) if action.target.strip() else ""
+            if base_cmd in ("curl", "wget"):
+                return WardenVerdict(
+                    verdict=Verdict.HALT,
+                    reason=f"Suspicious process spawned: {base_cmd}",
+                    action=action, evaluator="rule_engine"
+                )
+
+        # Writing outside allowed workspace
+        if action.action_type == ActionType.FILE_WRITE:
+            v, _ = self.scope.check_filesystem(action.target)
+            if v == Verdict.FLAG:
+                return WardenVerdict(
+                    verdict=Verdict.HALT,
+                    reason=f"Write outside allowed workspace: {action.target}",
+                    action=action, evaluator="rule_engine"
+                )
+
+        # 50+ network_out events in 60 seconds
+        if action.action_type == ActionType.NETWORK_OUT:
+            self.network_out_timestamps.append(now)
+            self.network_out_timestamps = [
+                t for t in self.network_out_timestamps if now - t <= 60
+            ]
+            if len(self.network_out_timestamps) >= 50:
+                return WardenVerdict(
+                    verdict=Verdict.HALT,
+                    reason=f"Mass API calls: {len(self.network_out_timestamps)} "
+                           f"network events in 60s",
+                    action=action, evaluator="rule_engine"
+                )
+
+        return None
+
     async def evaluate_action(self, action: AgentAction) -> WardenVerdict:
         """Rule engine first, then LLM for ambiguous cases."""
-        
-        if action.action_type in (ActionType.FILE_READ, ActionType.FILE_WRITE, 
+
+        # Hardcoded KILL checks (highest priority)
+        kill_verdict = self._check_hardcoded_kill(action)
+        if kill_verdict is not None:
+            return kill_verdict
+
+        # Behavioral HALT checks
+        halt_verdict = self._check_halt_triggers(action)
+        if halt_verdict is not None:
+            return halt_verdict
+
+        if action.action_type in (ActionType.FILE_READ, ActionType.FILE_WRITE,
                                    ActionType.FILE_DELETE):
             verdict, reason = self.scope.check_filesystem(action.target)
         elif action.action_type == ActionType.NETWORK_OUT:
@@ -723,19 +837,19 @@ class Warden:
             verdict, reason = self.scope.check_command(action.target)
         else:
             verdict, reason = Verdict.FLAG, "Unknown action type"
-        
+
         # Definitive answers don't need LLM
         if verdict in (Verdict.SAFE, Verdict.KILL):
             return WardenVerdict(
                 verdict=verdict, reason=reason,
                 action=action, evaluator="rule_engine"
             )
-        
+
         # FLAG -> escalate to LLM judge
         if self.judge.available:
             recent = [v.action for v in self.all_verdicts[-20:]]
             return await self.judge.evaluate(action, self.scope_summary, recent)
-        
+
         return WardenVerdict(
             verdict=Verdict.FLAG,
             reason=reason + " (LLM unavailable)",
@@ -818,6 +932,11 @@ class Warden:
                             f"{self.scope.flag_threshold}]: "
                             f"{action.action_type.value}: {action.target[:60]}"
                         )
+                    elif verdict.verdict == Verdict.HALT:
+                        self.log.warning(
+                            f"🟡 HALT [{verdict.timestamp}]: {verdict.reason} "
+                            f"| {action.action_type.value}: {action.target[:60]}"
+                        )
                     elif verdict.verdict == Verdict.KILL:
                         await self.execute_kill(verdict)
                         break
@@ -838,12 +957,14 @@ class Warden:
         duration = time.time() - self.start_time
         safe = sum(1 for v in self.all_verdicts if v.verdict == Verdict.SAFE)
         flags = sum(1 for v in self.all_verdicts if v.verdict == Verdict.FLAG)
+        halts = sum(1 for v in self.all_verdicts if v.verdict == Verdict.HALT)
         kills = sum(1 for v in self.all_verdicts if v.verdict == Verdict.KILL)
-        
+
         self.log.info("")
         self.log.info(f"🛡️  Session complete ({duration:.1f}s)")
         self.log.info(f"   Observed: {len(self.all_verdicts)} | "
-                      f"Safe: {safe} | Flags: {flags} | Kills: {kills}")
+                      f"Safe: {safe} | Flags: {flags} | Halts: {halts} | "
+                      f"Kills: {kills}")
         if self.killed:
             self.log.info("   ⚠️  AGENT WAS TERMINATED")
 
