@@ -172,20 +172,36 @@ class Scope:
         return Verdict.FLAG, f"Path outside allowed scope: {path}"
     
     def check_network(self, domain: str, port: int = 443) -> tuple:
+        import socket
+
         domain = domain.lower().strip()
-        
+
+        # Localhost is always safe (IPC, Ollama, etc.)
+        if domain in ("127.0.0.1", "::1", "localhost"):
+            return Verdict.SAFE, f"Localhost connection: {domain}:{port}"
+
+        # If it looks like a raw IP, try reverse DNS to get a hostname
+        is_ip = all(c.isdigit() or c == "." or c == ":" for c in domain)
+        if is_ip:
+            try:
+                resolved = socket.gethostbyaddr(domain)[0].lower()
+            except Exception:
+                resolved = domain
+        else:
+            resolved = domain
+
         for forbidden in self.forbidden_domains:
-            if domain == forbidden or domain.endswith(f".{forbidden}"):
-                return Verdict.KILL, f"Connection to forbidden domain: {domain}"
-        
+            if resolved == forbidden or resolved.endswith(f".{forbidden}"):
+                return Verdict.KILL, f"Connection to forbidden domain: {resolved}"
+
         for allowed in self.allowed_domains:
-            if domain == allowed or domain.endswith(f".{allowed}"):
+            if resolved == allowed or resolved.endswith(f".{allowed}"):
                 if port in self.allowed_ports:
-                    return Verdict.SAFE, f"Allowed domain and port: {domain}:{port}"
+                    return Verdict.SAFE, f"Allowed domain and port: {resolved}:{port}"
                 else:
-                    return Verdict.FLAG, f"Allowed domain but unusual port: {domain}:{port}"
-        
-        return Verdict.FLAG, f"Connection to unknown domain: {domain}:{port}"
+                    return Verdict.FLAG, f"Allowed domain but unusual port: {resolved}:{port}"
+
+        return Verdict.FLAG, f"Connection to unknown host: {resolved} ({domain}):{port}"
     
     def check_command(self, command: str) -> tuple:
         parts = command.strip().split()
