@@ -158,6 +158,21 @@ _Current status based on repository checks and CI configuration; not a formal se
 - ✅ Publish workflow (`.github/workflows/publish.yml`)
 - ✅ Security disclosure policy (`SECURITY.md`)
 
+## Hermes Labs Ecosystem
+
+suy-sideguy is part of the [Hermes Labs](https://hermes-labs.ai) open-source suite:
+
+- [**little-canary**](https://github.com/roli-lpci/little-canary) — Prompt injection detection
+- [**zer0dex**](https://github.com/roli-lpci/zer0dex) — Dual-layer memory for AI agents
+- [**forgetted**](https://github.com/roli-lpci/forgetted) — Selective memory governance
+- [**zer0lint**](https://github.com/roli-lpci/zer0lint) — mem0 extraction diagnostics
+- [**lintlang**](https://github.com/roli-lpci/lintlang) — Static linter for AI agent configs
+- [**quickthink**](https://github.com/roli-lpci/quickthink) — Planning scaffolding for local LLMs
+
+---
+
+If suy-sideguy saves you time, please [star the repo](https://github.com/roli-lpci/suy-sideguy) — it helps others find it.
+
 ## Development
 
 ```bash
