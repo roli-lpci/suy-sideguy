@@ -1,6 +1,6 @@
 # suy-sideguy
 
-**Userspace runtime warden for autonomous agents.** Watches a running agent process, scores observed file / network / process behavior against a policy, and can flag, halt, or `SIGKILL` the agent before a dangerous action completes.
+**Watch an agent process and SIGKILL it on policy violation.** Userspace warden that scores file, network, and subprocess behavior against a YAML policy and freezes or kills the agent before a dangerous action completes — no kernel module, no LLM judge in the hot path.
 
 [![PyPI](https://img.shields.io/pypi/v/suy-sideguy)](https://pypi.org/project/suy-sideguy/)
 [![Python](https://img.shields.io/pypi/pyversions/suy-sideguy)](https://pypi.org/project/suy-sideguy/)
@@ -8,15 +8,15 @@
 [![CI](https://github.com/hermes-labs-ai/suy-sideguy/actions/workflows/ci.yml/badge.svg)](https://github.com/hermes-labs-ai/suy-sideguy/actions/workflows/ci.yml)
 [![Hermes Seal](https://img.shields.io/badge/hermes--seal-manifest%20staged-blue)](https://github.com/hermes-labs-ai/suy-sideguy)
 
-If your prompt-side defenses pass, the policy is signed, the system prompt is locked — and your agent still touches `~/.ssh/`, opens 80 outbound connections in a minute, or `rm -rf`s outside `/tmp` — this is the warden that catches the action mid-flight and stops it.
+If your agent passed every static check and then deleted 40 files in 8 seconds — this is the watcher that would have stopped it at file 4.
 
 ## Pain
 
-- Static prompt audits passed; the agent went off the rails the moment it had a shell.
-- An LLM judge alone can't keep up with file-system events at process speed; you need the kernel's view, not the model's.
-- Forensic logs are only useful *after* the bad thing happened. You want a watcher that interrupts mid-action, not just records.
-- You want PID-targeted enforcement (not name matching), because name matching over-matches and you've been burned by it.
-- You're running an autonomous agent on real workloads and "we'll review the audit log next week" is not a containment strategy.
+- Your agent did `rm -rf` outside `/tmp` at 2am and you found out from the morning standup.
+- You wanted to "just read the audit log" — except the agent already read `~/.ssh/id_rsa` 200ms after the suspicious command, and the log was written *after* the read completed.
+- You tried `--agent-name my-agent` once; it matched 3 unrelated processes and one of them was your editor.
+- You stacked an LLM judge in front of every shell call and the latency was 800ms per action; the agent now runs at one-tenth the speed and you're paying for two model calls per command.
+- You have a "policy YAML" but it's an aspirational doc, not something a process is enforcing in real time.
 
 ## Install
 
